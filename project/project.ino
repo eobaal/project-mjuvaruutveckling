@@ -34,9 +34,9 @@ WiFiClient wifi_client;
 void setup() {
   // Initialize Serial for debugging
   Serial.begin(115200);
-  // Wait for the Serial port to be ready
   while (!Serial);
   Serial.println("Starting ESP32 program...");
+  
   tft.init();
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
@@ -44,10 +44,18 @@ void setup() {
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
   pinMode(PIN_BUTTON_2, INPUT_PULLUP);
 
-  // Connect to WIFI
+  // --- US1.1 Bootskärm ---
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(20, 60);
+  tft.println("WeatherApp v1.0");
+  tft.setCursor(20, 100);
+  tft.println("Team 7");
+  delay(3000); // Visa i 3 sekunder
+
+  // --- WiFi startar efter bootskärmen ---
   WiFi.begin(ssid, password);
 
-  // Will be stuck here until a proper wifi is configured
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     tft.fillScreen(TFT_BLACK);
@@ -60,9 +68,8 @@ void setup() {
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.drawString("Connected to WiFi", 10, 10);
   Serial.println("Connected to WiFi");
-  // Add your code bellow 
-
 }
+
 
 /**
  * This is the main loop function that runs continuously after setup.

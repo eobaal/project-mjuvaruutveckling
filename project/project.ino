@@ -11,7 +11,7 @@
 #include <TFT_eSPI.h>
 #include <time.h>
 
-
+ 
 // Remember to remove these before commiting in GitHub
 String ssid = "Obadas iPhone";
 String password = "12345678900";

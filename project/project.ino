@@ -11,7 +11,7 @@
 #include <TFT_eSPI.h>
 #include <time.h>
 
- 
+
 // Remember to remove these before commiting in GitHub
 String ssid = "Obadas iPhone";
 String password = "12345678900";
@@ -97,14 +97,14 @@ void loop() {
     PIN_LCD_D7   != TFT_D7  || \
     PIN_LCD_BL   != TFT_BL  || \
     TFT_BACKLIGHT_ON   != HIGH  || \
-    170   != TFT_WIDTH  || \
+    170   != TFT_WIDTH  || \  
     320   != TFT_HEIGHT
 #error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
 #error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
 #error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
 #error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
 #endif
-
+ 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5,0,0)
 #error  "The current version is not supported for the time being, please use a version below Arduino ESP32 3.0"
 #endif

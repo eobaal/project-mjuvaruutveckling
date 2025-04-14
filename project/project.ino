@@ -11,8 +11,8 @@
 #include <TFT_eSPI.h>
 #include <time.h>
 
-String ssid = "Obadas iPhone";
-String password = "12345678900";
+String ssid = "Abo Hasan";
+String password = "12345678";
 
 TFT_eSPI tft = TFT_eSPI();
 #define DISPLAY_WIDTH 320
@@ -29,7 +29,6 @@ void fetchWeatherData(float temps[], String times[], int maxCount) {
     String payload = http.getString();
     DynamicJsonDocument doc(120000);
     DeserializationError error = deserializeJson(doc, payload);
-    Serial.println(payload); 
     if (!error) {
       JsonArray series = doc["timeSeries"];
       int count = 0;
@@ -53,7 +52,6 @@ void fetchWeatherData(float temps[], String times[], int maxCount) {
   }
   http.end();
 }
-
 
 void drawWeatherGraph(float temps[], String times[], int count) {
   tft.fillScreen(TFT_BLACK);
@@ -116,22 +114,18 @@ void setup() {
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
   pinMode(PIN_BUTTON_2, INPUT_PULLUP);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.persistent(true);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Serial.print("WiFi Status Code: ");
-    Serial.println(WiFi.status()); // Example: 6 = WL_DISCONNECTED
-  
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_WHITE);
     tft.drawString("Connecting to WiFi...", 10, 10);
+    Serial.println("Connecting to WiFi...");
   }
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_GREEN);
   tft.drawString("Connected to WiFi", 10, 10);
+  Serial.println("Connectied to WiFi.");
 }
 
 void loop() {

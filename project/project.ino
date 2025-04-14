@@ -11,100 +11,133 @@
 #include <TFT_eSPI.h>
 #include <time.h>
 
-
-// Remember to remove these before commiting in GitHub
 String ssid = "Obadas iPhone";
 String password = "12345678900";
 
-// "tft" is the graphics libary, which has functions to draw on the screen
 TFT_eSPI tft = TFT_eSPI();
-
-// Display dimentions
 #define DISPLAY_WIDTH 320
 #define DISPLAY_HEIGHT 170
-
 WiFiClient wifi_client;
 
-/**
- * Setup function
- * This function is called once when the program starts to initialize the program
- * and set up the hardware.
- * Carefull when modifying this function.
- */
+void fetchWeatherData(float temps[], String times[], int maxCount) {
+  HTTPClient http;
+  String url = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/18.0686/lat/59.3293/data.json";
+  http.begin(url);
+  int httpCode = http.GET();
+
+  if (httpCode == 200) {
+    String payload = http.getString();
+    DynamicJsonDocument doc(120000);
+    DeserializationError error = deserializeJson(doc, payload);
+    Serial.println(payload); 
+    if (!error) {
+      JsonArray series = doc["timeSeries"];
+      int count = 0;
+      for (JsonObject entry : series) {
+        if (count >= maxCount) break;
+        String time = entry["validTime"].as<String>();
+        JsonArray parameters = entry["parameters"];
+        for (JsonObject param : parameters) {
+          if (param["name"] == "t") {
+            float value = param["values"][0].as<float>();
+            if (value > -50 && value < 60) {
+              temps[count] = value;
+              times[count] = time.substring(11, 16);
+              count++;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  http.end();
+}
+
+
+void drawWeatherGraph(float temps[], String times[], int count) {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(1);
+  tft.drawString("Temp kommande 24h", 10, 5);
+  if (count == 0) {
+    tft.drawString("Ingen data", 10, 20);
+    return;
+  }
+
+  float minTemp = temps[0], maxTemp = temps[0];
+  for (int i = 1; i < count; i++) {
+    if (temps[i] < minTemp) minTemp = temps[i];
+    if (temps[i] > maxTemp) maxTemp = temps[i];
+  }
+  float padding = 2.0;
+  minTemp -= padding;
+  maxTemp += padding;
+  float scale = (DISPLAY_HEIGHT - 60) / (maxTemp - minTemp);
+  int graphWidth = DISPLAY_WIDTH - 60;
+  int stepX = graphWidth / (count - 1);
+  int baseY = DISPLAY_HEIGHT - 30;
+
+  // Rita axlar
+  tft.drawLine(30, 20, 30, baseY, TFT_WHITE);
+  tft.drawLine(30, baseY, DISPLAY_WIDTH - 20, baseY, TFT_WHITE);
+
+  // Rita temperaturkurva
+  for (int i = 0; i < count - 1; i++) {
+    int x1 = 30 + i * stepX;
+    int y1 = baseY - (temps[i] - minTemp) * scale;
+    int x2 = 30 + (i + 1) * stepX;
+    int y2 = baseY - (temps[i + 1] - minTemp) * scale;
+    tft.drawLine(x1, y1, x2, y2, TFT_CYAN);
+  }
+
+  // Y-axel etiketter
+  for (int i = 0; i <= 5; i++) {
+    float t = minTemp + i * (maxTemp - minTemp) / 5;
+    int y = baseY - (t - minTemp) * scale;
+    tft.drawString(String(t, 1) + " C", 0, y - 3);
+  }
+
+  // X-axel etiketter
+  for (int i = 0; i < count; i += 3) {
+    int x = 30 + i * stepX;
+    if (x < DISPLAY_WIDTH - 20) {
+      tft.drawString(times[i], x - 10, baseY + 5);
+    }
+  }
+}
+
 void setup() {
-  // Initialize Serial for debugging
   Serial.begin(115200);
-  // Wait for the Serial port to be ready
   while (!Serial);
-  Serial.println("Starting ESP32 program...");
   tft.init();
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
-
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
   pinMode(PIN_BUTTON_2, INPUT_PULLUP);
 
-  // Connect to WIFI
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
   WiFi.begin(ssid, password);
-
-  // Will be stuck here until a proper wifi is configured
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("Connecting to WiFi...", 10, 10);
-    Serial.println("Attempting to connect to WiFi...");
-  }
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  tft.drawString("Connected to WiFi", 10, 10);
-  Serial.println("Connected to WiFi");
-  // Add your code bellow 
-
-}
-
-/**
- * This is the main loop function that runs continuously after setup.
- * Add your code here to perform tasks repeatedly.
- */
-void loop() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(2);
-  tft.drawString("Hello student", 10, 10);
+    Serial.print("WiFi Status Code: ");
+    Serial.println(WiFi.status()); // Example: 6 = WL_DISCONNECTED
   
-  delay(1000);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString("Connecting to WiFi...", 10, 10);
+  }
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_GREEN);
+  tft.drawString("Connected to WiFi", 10, 10);
 }
 
-
-// TFT Pin check
-  //////////////////
- // DO NOT TOUCH //
-//////////////////
-#if PIN_LCD_WR  != TFT_WR || \
-    PIN_LCD_RD  != TFT_RD || \
-    PIN_LCD_CS    != TFT_CS   || \
-    PIN_LCD_DC    != TFT_DC   || \
-    PIN_LCD_RES   != TFT_RST  || \
-    PIN_LCD_D0   != TFT_D0  || \
-    PIN_LCD_D1   != TFT_D1  || \
-    PIN_LCD_D2   != TFT_D2  || \
-    PIN_LCD_D3   != TFT_D3  || \
-    PIN_LCD_D4   != TFT_D4  || \
-    PIN_LCD_D5   != TFT_D5  || \
-    PIN_LCD_D6   != TFT_D6  || \
-    PIN_LCD_D7   != TFT_D7  || \
-    PIN_LCD_BL   != TFT_BL  || \
-    TFT_BACKLIGHT_ON   != HIGH  || \
-    170   != TFT_WIDTH  || \  
-    320   != TFT_HEIGHT
-#error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
-#error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
-#error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
-#error  "Error! Please make sure <User_Setups/Setup206_LilyGo_T_Display_S3.h> is selected in <TFT_eSPI/User_Setup_Select.h>"
-#endif
- 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5,0,0)
-#error  "The current version is not supported for the time being, please use a version below Arduino ESP32 3.0"
-#endif
+void loop() {
+  float temps[24];
+  String times[24];
+  fetchWeatherData(temps, times, 24);
+  drawWeatherGraph(temps, times, 24);
+  delay(60000);
+}

@@ -4,9 +4,11 @@
 #include <TFT_eSPI.h>
 #include "pin_config.h"
 
+// WiFi-inställningar
 const char* ssid = "Abo Hasan";
 const char* password = "12345678";
 
+// Skärm
 TFT_eSPI tft = TFT_eSPI();
 
 // Timer för auto-uppdatering
@@ -45,21 +47,23 @@ void setup() {
   showMessage("WiFi ansluten!", TFT_GREEN);
   delay(1000);
 
-  showMessage("Hej students");
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.drawString("Hello students", 10, 10);
   delay(2000);
-  showMessage("Group 9");
+  tft.drawString("Group 9", 10, 40);
   delay(3000);
 
-  fetchAndShowTemperature();
+  fetchAndShowGraph();
   lastUpdate = millis();
 }
 
-void fetchAndShowTemperature() {
+void fetchAndShowGraph() {
   showMessage("Uppdaterar...");
   HTTPClient http;
-  
-  // Open-Meteo API för Karlskrona
-  http.begin("https://api.open-meteo.com/v1/forecast?latitude=56.1612&longitude=15.5869&current_weather=true");
+
+  http.begin("https://api.open-meteo.com/v1/forecast?latitude=56.1612&longitude=15.5869&hourly=temperature_2m&forecast_days=1");
   http.addHeader("Accept", "application/json");
 
   int httpCode = http.GET();
@@ -70,19 +74,18 @@ void fetchAndShowTemperature() {
     String payload = http.getString();
     Serial.println("Data mottagen!");
 
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(30000); // Större dokumentstorlek
+
     DeserializationError error = deserializeJson(doc, payload);
 
     if (!error) {
-      float temp = doc["current_weather"]["temperature"];
-      Serial.print("Temperatur: ");
-      Serial.println(temp);
+      JsonArray temps = doc["hourly"]["temperature_2m"];
 
-      tft.fillScreen(TFT_BLACK);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.setTextSize(2);
-      tft.drawString("Plats: Karlskrona", 10, 30);
-      tft.drawString("Temp: " + String(temp, 1) + " \xB0C", 10, 70);
+      if (!temps.isNull()) {
+        drawTemperatureGraph(temps);
+      } else {
+        showMessage("Ingen data!", TFT_RED);
+      }
     } else {
       Serial.print("JSON Fel: ");
       Serial.println(error.c_str());
@@ -96,9 +99,60 @@ void fetchAndShowTemperature() {
   http.end();
 }
 
+void drawTemperatureGraph(JsonArray temps) {
+  tft.fillScreen(TFT_BLACK);
+
+  int x0 = 30; // Start x
+  int y0 = 140; // Baslinje y
+  int width = 260;
+  int height = 100;
+
+  tft.drawLine(x0, y0, x0 + width, y0, TFT_WHITE); // X-axel
+  tft.drawLine(x0, y0, x0, y0 - height, TFT_WHITE); // Y-axel
+
+  // Hitta min och max temperatur
+  float minTemp = temps[0].as<float>();
+  float maxTemp = temps[0].as<float>();
+  for (int i = 0; i < 24; i++) {
+    float value = temps[i].as<float>();
+    if (value < minTemp) minTemp = value;
+    if (value > maxTemp) maxTemp = value;
+  }
+
+  int stepX = width / 23; // 23 steg för 24 punkter
+
+  // Rita graf
+  for (int i = 0; i < 23; i++) {
+    int x1 = x0 + i * stepX;
+    int x2 = x0 + (i + 1) * stepX;
+
+    int y1 = y0 - ((temps[i].as<float>() - minTemp) / (maxTemp - minTemp)) * height;
+    int y2 = y0 - ((temps[i + 1].as<float>() - minTemp) / (maxTemp - minTemp)) * height;
+
+    tft.drawLine(x1, y1, x2, y2, TFT_GREEN);
+    tft.fillCircle(x1, y1, 2, TFT_RED);
+  }
+
+  // Sista punkten
+  tft.fillCircle(x0 + 23 * stepX, y0 - ((temps[23].as<float>() - minTemp) / (maxTemp - minTemp)) * height, 2, TFT_RED);
+
+  // Skriv temperatur på Y-axeln
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(1);
+  tft.drawString(String(maxTemp, 1) + " C", 2, y0 - height);
+  tft.drawString(String(minTemp, 1) + " C", 2, y0 - 10);
+
+  // Skriv tid på X-axeln
+  tft.drawString("0h", x0 - 5, y0 + 5);
+  tft.drawString("6h", x0 + stepX * 6 - 5, y0 + 5);
+  tft.drawString("12h", x0 + stepX * 12 - 5, y0 + 5);
+  tft.drawString("18h", x0 + stepX * 18 - 5, y0 + 5);
+  tft.drawString("23h", x0 + stepX * 23 - 10, y0 + 5);
+}
+
 void loop() {
   if (millis() - lastUpdate >= updateInterval) {
-    fetchAndShowTemperature();
+    fetchAndShowGraph();
     lastUpdate = millis();
   }
 }

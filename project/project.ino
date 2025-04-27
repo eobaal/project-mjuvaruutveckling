@@ -9,6 +9,10 @@ const char* password = "12345678";
 
 TFT_eSPI tft = TFT_eSPI();
 
+// Timer för auto-uppdatering
+unsigned long lastUpdate = 0;
+const unsigned long updateInterval = 10 * 60 * 1000; // 10 minuter
+
 void showMessage(const String& message, uint32_t color = TFT_WHITE) {
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(color, TFT_BLACK);
@@ -47,12 +51,15 @@ void setup() {
   delay(3000);
 
   fetchAndShowTemperature();
+  lastUpdate = millis();
 }
 
 void fetchAndShowTemperature() {
   showMessage("Uppdaterar...");
   HTTPClient http;
-  http.begin("http://opendata-download-metanalys.smhi.se/api/category/mesan1g/version/2/geotype/point/lon/15.5869/lat/56.1612/data.json");
+  
+  // Open-Meteo API för Karlskrona
+  http.begin("https://api.open-meteo.com/v1/forecast?latitude=56.1612&longitude=15.5869&current_weather=true");
   http.addHeader("Accept", "application/json");
 
   int httpCode = http.GET();
@@ -63,26 +70,19 @@ void fetchAndShowTemperature() {
     String payload = http.getString();
     Serial.println("Data mottagen!");
 
-    DynamicJsonDocument doc(8192);
+    DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, payload);
 
     if (!error) {
-      JsonObject root = doc.as<JsonObject>();
-      JsonArray parameters = root["timeSeries"][0]["parameters"];
-      for (JsonObject param : parameters) {
-        if (param["name"] == "t") { // t = Temperatur
-          float temp = param["values"][0];
-          Serial.print("Temperatur hittad: ");
-          Serial.println(temp);
+      float temp = doc["current_weather"]["temperature"];
+      Serial.print("Temperatur: ");
+      Serial.println(temp);
 
-          tft.fillScreen(TFT_BLACK);
-          tft.setTextColor(TFT_WHITE, TFT_BLACK);
-          tft.setTextSize(2);
-          tft.drawString("Plats: Karlskrona", 10, 30);
-          tft.drawString("Temp: " + String(temp, 1) + " \xB0C", 10, 70);
-          return;
-        }
-      }
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.setTextSize(2);
+      tft.drawString("Plats: Karlskrona", 10, 30);
+      tft.drawString("Temp: " + String(temp, 1) + " \xB0C", 10, 70);
     } else {
       Serial.print("JSON Fel: ");
       Serial.println(error.c_str());
@@ -97,5 +97,8 @@ void fetchAndShowTemperature() {
 }
 
 void loop() {
-  // Tom loop
+  if (millis() - lastUpdate >= updateInterval) {
+    fetchAndShowTemperature();
+    lastUpdate = millis();
+  }
 }

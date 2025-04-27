@@ -4,13 +4,11 @@
 #include <TFT_eSPI.h>
 #include "pin_config.h"
 
-// WiFi-uppgifter
 const char* ssid = "Abo Hasan";
 const char* password = "12345678";
 
 TFT_eSPI tft = TFT_eSPI();
 
-// Timer
 unsigned long lastUpdate = 0;
 const unsigned long updateInterval = 10 * 60 * 1000; // 10 minuter
 
@@ -75,28 +73,40 @@ void fetchAndShowTemperature() {
 
   if (httpCode == 200) {
     String payload = http.getString();
-    DynamicJsonDocument doc(20000);
+    DynamicJsonDocument doc(40000);  // Ökat minne
     DeserializationError error = deserializeJson(doc, payload);
 
     if (!error) {
       JsonArray timeSeries = doc["timeSeries"];
       if (!timeSeries.isNull()) {
-        JsonObject firstTime = timeSeries[0];
-        JsonArray parameters = firstTime["parameters"];
-        for (JsonObject param : parameters) {
-          if (param["name"] == "t") {
-            float temp = param["values"][0];
-            Serial.print("TEMPERATUR: ");
-            Serial.println(temp);
+        bool found = false;
+        for (JsonObject timeStep : timeSeries) {
+          JsonArray parameters = timeStep["parameters"];
+          for (JsonObject param : parameters) {
+            if (param["name"] == "t") {
+              float temp = param["values"][0];
+              Serial.print("TEMPERATUR: ");
+              Serial.println(temp);
 
-            tft.fillScreen(TFT_BLACK);
-            tft.setTextColor(TFT_WHITE, TFT_BLACK);
-            tft.setTextSize(2);
-            tft.drawString("Plats: Karlskrona", 10, 30);
-            tft.drawString("Temp: " + String(temp, 1) + " \xB0C", 10, 70);
-            return;
+              tft.fillScreen(TFT_BLACK);
+              tft.setTextColor(TFT_WHITE, TFT_BLACK);
+              tft.setTextSize(2);
+              tft.drawString("Plats: Karlskrona", 10, 30);
+              tft.drawString("Temp: " + String(temp, 1) + " \xB0C", 10, 70);
+
+              found = true;
+              break;
+            }
           }
+          if (found) break;
         }
+        if (!found) {
+          Serial.println("Hittade ingen temperaturdata!");
+          showMessage("Ingen temperatur!", TFT_RED);
+        }
+      } else {
+        Serial.println("Ingen 'timeSeries' i svaret.");
+        showMessage("Fel i datan!", TFT_RED);
       }
     } else {
       Serial.print("JSON Fel: ");

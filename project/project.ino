@@ -3,8 +3,8 @@
 #include <ArduinoJson.h>
 #include <TFT_eSPI.h>
 #include "pin_config.h"
+#include <algorithm> // For min_element and max_element
 
-// === Funktioner ===
 void drawTemperatureGraph();
 void showCurrentTemperature();
 void showWiFiStatus();
@@ -12,7 +12,6 @@ void fetchWeatherData();
 void showMenu();
 void drawWeatherIcon(int x, int y, int code);
 
-// === Globala variabler ===
 const char* ssid = "Abo Hasan";
 const char* password = "12345678";
 
@@ -21,14 +20,30 @@ TFT_eSPI tft = TFT_eSPI();
 String menuItems[] = {"Weather", "Temperature", "WiFi Status"};
 int menuIndex = 0;
 bool menuSelected = false;
+bool cityChangeRequested = false;
+
+struct City {
+  const char* name;
+  float lat;
+  float lon;
+};
+
+City cities[] = {
+  {"Karlskrona", 56.1612, 15.5869},
+  {"Stockholm", 59.3293, 18.0686},
+  {"Goteborg", 57.7089, 11.9746},
+  {"Malmo", 55.604981, 13.003822}
+};
+
+int cityIndex = 0;
 
 DynamicJsonDocument doc(30000);
-std::vector<float> temperatures24h; // NYTT: lista med 24 temperaturer
+std::vector<float> temperatures24h;
 float currentTemperature = NAN;
 int currentWeatherCode = -1;
 
 unsigned long lastUpdate = 0;
-const unsigned long updateInterval = 10 * 60 * 1000; // 10 min
+const unsigned long updateInterval = 10 * 60 * 1000;
 
 void setup() {
   Serial.begin(115200);
@@ -68,7 +83,6 @@ void setup() {
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.drawString("WiFi Connected!", 10, 10);
   Serial.println("WiFi Connected!");
-
   delay(2000);
 
   fetchWeatherData();
@@ -77,45 +91,27 @@ void setup() {
 }
 
 void fetchWeatherData() {
-  HTTPClient http;
-  http.begin("https://api.open-meteo.com/v1/forecast?latitude=56.1612&longitude=15.5869&hourly=temperature_2m&current_weather=true");
+  City city = cities[cityIndex];
+  String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(city.lat) + "&longitude=" + String(city.lon) + "&hourly=temperature_2m&current_weather=true";
 
+  HTTPClient http;
+  http.begin(url);
   int httpCode = http.GET();
-  Serial.print("HTTP code: ");
-  Serial.println(httpCode);
 
   if (httpCode == 200) {
     String payload = http.getString();
     DeserializationError error = deserializeJson(doc, payload);
 
     if (!error) {
-      if (doc.containsKey("hourly") && doc["hourly"].containsKey("temperature_2m")) {
-        JsonArray temps = doc["hourly"]["temperature_2m"];
-        temperatures24h.clear();
-        for (int i = 0; i < 24; i++) {
-          temperatures24h.push_back(temps[i]);
-        }
+      JsonArray temps = doc["hourly"]["temperature_2m"];
+      temperatures24h.clear();
+      for (int i = 0; i < 24; i++) {
+        temperatures24h.push_back(temps[i]);
       }
-      if (doc.containsKey("current_weather")) {
-        if (doc["current_weather"].containsKey("temperature")) {
-          currentTemperature = doc["current_weather"]["temperature"].as<float>();
-          Serial.print("Temperature: ");
-          Serial.println(currentTemperature);
-        }
-        if (doc["current_weather"].containsKey("weathercode")) {
-          currentWeatherCode = doc["current_weather"]["weathercode"].as<int>();
-          Serial.print("Weather code: ");
-          Serial.println(currentWeatherCode);
-        }
-      }
-    } else {
-      Serial.print("JSON error: ");
-      Serial.println(error.c_str());
+      currentTemperature = doc["current_weather"]["temperature"].as<float>();
+      currentWeatherCode = doc["current_weather"]["weathercode"].as<int>();
     }
-  } else {
-    Serial.println("HTTP error!");
   }
-
   http.end();
 }
 
@@ -126,19 +122,25 @@ void showMenu() {
   tft.drawString("Menu:", 10, 10);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.drawString(menuItems[menuIndex], 10, 50);
-  tft.drawString("Press to select", 10, 100);
+  tft.drawString("City: " + String(cities[cityIndex].name), 10, 80);
+  tft.drawString("Press to select", 10, 120);
 }
 
 void loop() {
   if (!menuSelected) {
-    if (digitalRead(PIN_BUTTON_1) == LOW) {
+    if (digitalRead(PIN_BUTTON_1) == LOW && digitalRead(PIN_BUTTON_2) == LOW) {
+      delay(500);
+      cityIndex++;
+      if (cityIndex >= 4) cityIndex = 0;
+      fetchWeatherData();
+      showMenu();
+    }
+    else if (digitalRead(PIN_BUTTON_1) == LOW) {
       delay(200);
       menuIndex++;
       if (menuIndex > 2) menuIndex = 0;
       showMenu();
-    }
-
-    if (digitalRead(PIN_BUTTON_2) == LOW) {
+    } else if (digitalRead(PIN_BUTTON_2) == LOW) {
       delay(200);
       menuSelected = true;
     }
@@ -152,33 +154,17 @@ void loop() {
   if (menuSelected) {
     if (menuIndex == 0) {
       drawTemperatureGraph();
-      while (true) {
-        if (digitalRead(PIN_BUTTON_1) == LOW && digitalRead(PIN_BUTTON_2) == LOW) {
-          delay(500);
-          menuSelected = false;
-          showMenu();
-          break;
-        }
-      }
     } else if (menuIndex == 1) {
       showCurrentTemperature();
-      while (true) {
-        if (digitalRead(PIN_BUTTON_1) == LOW && digitalRead(PIN_BUTTON_2) == LOW) {
-          delay(500);
-          menuSelected = false;
-          showMenu();
-          break;
-        }
-      }
     } else if (menuIndex == 2) {
       showWiFiStatus();
-      while (true) {
-        if (digitalRead(PIN_BUTTON_1) == LOW && digitalRead(PIN_BUTTON_2) == LOW) {
-          delay(500);
-          menuSelected = false;
-          showMenu();
-          break;
-        }
+    }
+    while (true) {
+      if (digitalRead(PIN_BUTTON_1) == LOW && digitalRead(PIN_BUTTON_2) == LOW) {
+        delay(500);
+        menuSelected = false;
+        showMenu();
+        break;
       }
     }
   }
@@ -186,12 +172,7 @@ void loop() {
 
 void drawTemperatureGraph() {
   tft.fillScreen(TFT_BLACK);
-
-  int x0 = 30;
-  int y0 = 140;
-  int width = 260;
-  int height = 100;
-
+  int x0 = 30, y0 = 140, width = 260, height = 100;
   tft.drawLine(x0, y0, x0 + width, y0, TFT_WHITE);
   tft.drawLine(x0, y0, x0, y0 - height, TFT_WHITE);
 
@@ -200,26 +181,18 @@ void drawTemperatureGraph() {
     return;
   }
 
-  float minTemp = temperatures24h[0];
-  float maxTemp = temperatures24h[0];
-  for (float temp : temperatures24h) {
-    if (temp < minTemp) minTemp = temp;
-    if (temp > maxTemp) maxTemp = temp;
-  }
+  float minTemp = *min_element(temperatures24h.begin(), temperatures24h.end());
+  float maxTemp = *max_element(temperatures24h.begin(), temperatures24h.end());
 
   int stepX = width / 23;
-
   for (int i = 0; i < 23; i++) {
     int x1 = x0 + i * stepX;
     int x2 = x0 + (i + 1) * stepX;
-
     int y1 = y0 - ((temperatures24h[i] - minTemp) / (maxTemp - minTemp)) * height;
     int y2 = y0 - ((temperatures24h[i+1] - minTemp) / (maxTemp - minTemp)) * height;
-
     tft.drawLine(x1, y1, x2, y2, TFT_GREEN);
     tft.fillCircle(x1, y1, 2, TFT_RED);
   }
-
   tft.fillCircle(x0 + 23 * stepX, y0 - ((temperatures24h[23] - minTemp) / (maxTemp - minTemp)) * height, 2, TFT_RED);
 
   tft.setTextColor(TFT_WHITE);
@@ -241,7 +214,7 @@ void drawTemperatureGraph() {
 void drawWeatherIcon(int x, int y, int code) {
   if (code == 0) {
     tft.fillCircle(x, y, 10, TFT_YELLOW);
-  } else if (code == 1 || code == 2 || code == 3) {
+  } else if (code >= 1 && code <= 3) {
     tft.fillCircle(x, y, 10, TFT_LIGHTGREY);
     tft.fillCircle(x + 10, y, 10, TFT_LIGHTGREY);
     tft.fillCircle(x + 5, y - 5, 10, TFT_LIGHTGREY);
@@ -259,19 +232,17 @@ void drawWeatherIcon(int x, int y, int code) {
 
 void showCurrentTemperature() {
   tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextColor(TFT_WHITE);
   tft.setTextSize(2);
-  tft.drawString("Location: Karlskrona", 10, 30);
+  tft.drawString("Location: " + String(cities[cityIndex].name), 10, 30);
   tft.drawString("Temp: " + String(currentTemperature, 1) + " C", 10, 70);
-
   drawWeatherIcon(250, 50, currentWeatherCode);
 }
 
 void showWiFiStatus() {
   tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextColor(TFT_WHITE);
   tft.setTextSize(2);
-
   if (WiFi.status() == WL_CONNECTED) {
     tft.drawString("WiFi: OK", 10, 50);
   } else {

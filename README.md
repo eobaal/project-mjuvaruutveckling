@@ -1,5 +1,5 @@
-✅ User Stories – Statusöversikt
-✅ Done (4 st)
+ User Stories – Statusöversikt
+ Done (4 st)
  US1.1 – Boot screen with version and team number
 
  US1.2 – 24h temperature forecast graph
@@ -8,17 +8,17 @@
 
  US2.2B – Access menu from anywhere by holding both buttons
 
-🔄 In Progress (2 st)
+In Progress (2 st)
  US3.1 – Menu option and screen to view historical weather data
 
  US4.3 – Select different cities for historical and forecast views
 
-🕓 Sprint Backlog (Not started yet – 2 st)
+Sprint Backlog (Not started yet – 2 st)
  US3.2 – View and interact with historical temperature data
 
  US4.1 – Access a settings menu to configure display options
 
-📥 Project Backlog (Not started – 4 st)
+ Project Backlog (Not started – 4 st)
  US4.2 – Select weather parameters (e.g., humidity, wind)
 
  US4.4 – Reset settings to default
